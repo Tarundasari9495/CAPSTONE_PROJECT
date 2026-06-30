@@ -1,0 +1,114 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1e40af', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#1e3a8a', 'lineColor': '#64748b', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b'}}}%%
+
+flowchart TB
+    %% ─────────────────────────────────────────
+    %% USER INTERACTION
+    %% ─────────────────────────────────────────
+    subgraph FE["Frontend — React + TypeScript + Tailwind CSS + Vite"]
+        direction TB
+        UP["📄 Upload Page\nDrag-and-drop PDF/DOCX"]
+        SP["⏳ Streaming Progress\nReal-time agent status"]
+        AD["📊 Analysis Detail Page\nSummary · Clauses · Risks · Metadata"]
+        HP["📋 History Page\nAll analyzed contracts"]
+        UP --> SP --> AD
+        HP --> AD
+    end
+
+    %% ─────────────────────────────────────────
+    %% API GATEWAY
+    %% ─────────────────────────────────────────
+    subgraph API["Backend — FastAPI (Python 3.11)"]
+        direction TB
+        AUTH["🔐 JWT Auth Middleware\nget_current_user dependency"]
+        R1["POST /contracts/upload\nFile validation · DB insert"]
+        R2["POST /contracts/analyze/{id}\nSSE stream · ownership check"]
+        R3["GET /contracts/{id}/analysis\nFull report retrieval"]
+        R4["GET /contracts/history\nUser contract list"]
+        R5["DELETE /contracts/{id}\nCascade delete"]
+        AUTH --> R1 & R2 & R3 & R4 & R5
+    end
+
+    %% ─────────────────────────────────────────
+    %% LANGGRAPH MULTI-AGENT WORKFLOW
+    %% ─────────────────────────────────────────
+    subgraph WORKFLOW["LangGraph Multi-Agent Workflow"]
+        direction TB
+
+        EXT["🔍 Agent 1: Document Extraction\nPyMuPDF · python-docx\nOutputs: document_text · page_count · metadata"]
+
+        subgraph PARALLEL["Parallel Execution"]
+            direction LR
+            CLA["📋 Agent 2: Clause Identification\n10 clause types detected\nTermination · Liability · IP..."]
+            RIS["⚠️ Agent 3: Risk Analysis\nHigh · Medium · Low per clause\nOverall risk score 0–100"]
+            DAT["📊 Agent 4: Data Extraction\nTitle · Parties · Dates\nContract value · Renewal"]
+            SUM["📝 Agent 5: Summarization\nExecutive summary\nKey terms · Obligations · Dates"]
+        end
+
+        REP["📑 Agent 6: Final Report Assembly\nMerge all agent outputs\nStructured JSON report"]
+
+        DB_PERSIST["💾 DB Persistence Node\nSave to PostgreSQL via Supabase"]
+
+        EXT --> PARALLEL
+        PARALLEL --> REP --> DB_PERSIST
+    end
+
+    %% ─────────────────────────────────────────
+    %% LLM GATEWAY
+    %% ─────────────────────────────────────────
+    subgraph LLM["AI Layer"]
+        direction LR
+        LITELLM["⚡ LiteLLM Gateway\nModel abstraction layer"]
+        OPENAI["🤖 OpenAI GPT-4o\nClause · Risk · Summary · Extraction"]
+        EMBED["🧬 text-embedding-3-large\nContract chunk embeddings"]
+        LITELLM --> OPENAI
+        LITELLM --> EMBED
+    end
+
+    %% ─────────────────────────────────────────
+    %% RAG LAYER
+    %% ─────────────────────────────────────────
+    subgraph RAG["RAG Infrastructure"]
+        direction TB
+        CHUNKER["✂️ Contract Chunker\n1000 token chunks · 200 overlap"]
+        EMBEDDER["🔢 Contract Embeddings\ntext-embedding-3-large"]
+        CHROMA["🗄️ ChromaDB\nLocal persistent vector store\ncollection: contract_{id}"]
+        RETRIEVER["🔎 Contract Retriever\nTop-5 relevant chunks\nWith page citations"]
+        CHUNKER --> EMBEDDER --> CHROMA
+        CHROMA --> RETRIEVER
+    end
+
+    %% ─────────────────────────────────────────
+    %% DATABASE
+    %% ─────────────────────────────────────────
+    subgraph DB["Database — PostgreSQL via Supabase"]
+        direction LR
+        T1["📦 contracts\nid · user_id · file_name\nstatus · upload_date"]
+        T2["📊 contract_analysis\ncontract_id · summary\nrisk_score · contract_info"]
+        T3["📋 contract_clauses\ncontract_id · clause_type\nclause_text · page_number"]
+        T4["⚠️ contract_risks\ncontract_id · risk_level\nrisk_description"]
+        T1 --> T2 & T3 & T4
+    end
+
+    %% ─────────────────────────────────────────
+    %% CONNECTIONS
+    %% ─────────────────────────────────────────
+    FE -->|"HTTP/SSE\nJSON + EventStream"| API
+    API --> WORKFLOW
+    WORKFLOW --> LLM
+    WORKFLOW --> RAG
+    RAG --> LLM
+    DB_PERSIST --> DB
+    API --> DB
+
+    %% ─────────────────────────────────────────
+    %% FILE SECURITY
+    %% ─────────────────────────────────────────
+    subgraph SEC["Security Layer"]
+        direction LR
+        MAG["🔒 Magic Byte Validation\npython-magic"]
+        SZE["📏 File Size Limit\n≤ 20 MB enforced server-side"]
+        OWN["👤 Ownership Guard\nuser_id check on every access"]
+        MAG --- SZE --- OWN
+    end
+
+    R1 --> SEC
